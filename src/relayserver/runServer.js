@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const fs = require('fs')
 const parseArgs = require('minimist')
 const Web3 = require('web3')
@@ -5,8 +7,13 @@ const HttpServer = require('./HttpServer')
 const RelayServer = require('./RelayServer')
 const KeyManager = require('./KeyManager')
 const TxStoreManager = require('./TxStoreManager').TxStoreManager
+const TXSTORE_FILENAME = require('./TxStoreManager').TXSTORE_FILENAME
 
 function error (err) { throw new Error(err) }
+// use all camel-case entries from environment as defaults.
+const envDefaults = Object.entries(process.env)
+  .filter(([k]) => /^[A-Z][a-z][A-Za-z]*$/.test(k))
+  .reduce((obj, [k, v]) => ({ ...obj, [k]: v }), {})
 
 const argv = parseArgs(process.argv.slice(2), {
   string:
@@ -22,7 +29,8 @@ const argv = parseArgs(process.argv.slice(2), {
       'Workdir'
     ],
   boolean: ['DevMode'],
-  alias: {}
+  alias: {},
+  default: envDefaults
 })
 
 if (argv._.length) error('unknown extra params: ' + argv._)
@@ -39,16 +47,13 @@ const gasPricePercent = argv.GasPricePercent || 10
 const ethereumNodeUrl = argv.EthereumNodeUrl || 'http://localhost:8545'
 const workdir = argv.Workdir || error('missing Workdir')
 const devMode = argv.DevMode || false
-
-let keypair
-try {
-  keypair = JSON.parse(fs.readFileSync(`${workdir}/keystore`)).ecdsaKeyPair
-  keypair.privateKey = Buffer.from(keypair.privateKey)
-  console.log('Using saved keypair')
-} catch (e) {
-  keypair = KeyManager.newKeypair()
+if (devMode) {
+  if (fs.existsSync(`${workdir}/${TXSTORE_FILENAME}`)) {
+    fs.unlinkSync(`${workdir}/${TXSTORE_FILENAME}`)
+  }
 }
-const keyManager = new KeyManager({ ecdsaKeyPair: keypair, workdir })
+
+const keyManager = new KeyManager({ count: 2, workdir })
 const txStoreManager = new TxStoreManager({ workdir })
 const web3provider = new Web3.providers.WebsocketProvider(ethereumNodeUrl)
 const gasPriceFactor = (parseInt(gasPricePercent) + 100) / 100

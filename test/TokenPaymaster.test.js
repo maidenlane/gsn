@@ -2,7 +2,7 @@
 
 import { constants } from '@openzeppelin/test-helpers'
 
-const Environments = require('../src/relayclient/Environments')
+const Environments = require('../src/relayclient/types/Environments')
 const RelayRequest = require('../src/common/EIP712/RelayRequest')
 
 const getDataToSign = require('../src/common/EIP712/Eip712Helper')
@@ -14,6 +14,7 @@ const TestToken = artifacts.require('TestToken.sol')
 const RelayHub = artifacts.require('RelayHub.sol')
 const TrustedForwarder = artifacts.require('./TrustedForwarder.sol')
 const StakeManager = artifacts.require('StakeManager')
+const Penalizer = artifacts.require('Penalizer')
 const TestProxy = artifacts.require('TestProxy')
 const { getEip712Signature } = require('../src/common/utils')
 
@@ -29,11 +30,12 @@ async function revertReason (func) {
 contract('TokenPaymaster', ([from, relay, relayOwner]) => {
   let paymaster, uniswap, token, recipient, hub, forwarder
   let stakeManager
+  let penalizer
   let sharedRelayRequestData
 
   async function calculatePostGas (paymaster) {
     const testpaymaster = await TokenPaymaster.new(await paymaster.uniswap(), { gas: 1e7 })
-    const calc = await TokenGasCalculator.new(Environments.defEnv.gtxdatanonzero, constants.ZERO_ADDRESS, { gas: 10000000 })
+    const calc = await TokenGasCalculator.new(Environments.defaultEnvironment.gtxdatanonzero, constants.ZERO_ADDRESS, constants.ZERO_ADDRESS, { gas: 10000000 })
     await testpaymaster.transferOwnership(calc.address)
     // put some tokens in paymaster so it can calculate postRelayedCall gas usage:
     await token.mint(1000)
@@ -46,7 +48,8 @@ contract('TokenPaymaster', ([from, relay, relayOwner]) => {
     // exchange rate 2 tokens per eth.
     uniswap = await TestUniswap.new(2, 1, { value: 5e18, gas: 1e7 })
     stakeManager = await StakeManager.new()
-    hub = await RelayHub.new(Environments.defEnv.gtxdatanonzero, stakeManager.address)
+    penalizer = await Penalizer.new()
+    hub = await RelayHub.new(Environments.defaultEnvironment.gtxdatanonzero, stakeManager.address, penalizer.address)
     token = await TestToken.at(await uniswap.tokenAddress())
 
     paymaster = await TokenPaymaster.new(uniswap.address, { gas: 1e7 })
@@ -127,13 +130,13 @@ contract('TokenPaymaster', ([from, relay, relayOwner]) => {
       const relayRequest = new RelayRequest({
         ...sharedRelayRequestData,
         senderAddress: from,
-        senderNonce: (await hub.getNonce(recipient.address, from)).toString(),
+        senderNonce: (await forwarder.getNonce(from)).toString(),
         gasPrice: '1',
         pctRelayFee: '0',
         baseRelayFee: '0'
       })
 
-      const chainId = Environments.defEnv.chainId
+      const chainId = Environments.defaultEnvironment.chainId
       const dataToSign = await getDataToSign({
         chainId,
         verifier: forwarder.address,

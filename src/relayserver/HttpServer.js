@@ -21,7 +21,7 @@ class HttpServer {
     this.app.post('/relay', this.relayHandler.bind(this))
     this.backend.once('removed', this.stop.bind(this))
     this.backend.once('unstaked', this.close.bind(this))
-    this.backend.on('error', console.error)
+    this.backend.on('error', (e) => { console.error('httpServer:', e) })
   }
 
   start () {
@@ -72,30 +72,23 @@ class HttpServer {
   }
 
   async pingHandler (req, res) {
-    const pingResponse = {
-      RelayServerAddress: this.backend.address,
-      MinGasPrice: this.backend.getMinGasPrice(),
-      Ready: this.backend.isReady(),
-      Version: this.backend.VERSION
-    }
+    const pingResponse = this.backend.pingHandler()
     res.send(pingResponse)
-    console.log(`address ${this.backend.address} sent. ready: ${this.backend.isReady()}`)
+    console.log(`address ${pingResponse.RelayServerAddress} sent. ready: ${pingResponse.Ready}`)
   }
 
   async relayHandler (req, res) {
-    console.log('relayHandler')
     if (!this.backend.isReady()) {
       res.send('Error: relay not ready')
       return
     }
-    console.log('creating relay tx')
+
     try {
       const signedTx = await this.backend.createRelayTransaction(req.body)
       res.send({ signedTx })
-      console.log('relay tx sent')
     } catch (e) {
       res.send({ error: e.message })
-      console.log(e)
+      console.log('tx failed:', e)
     }
   }
 }

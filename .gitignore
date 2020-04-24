@@ -1,6 +1,6 @@
 /build/
 .DS_Store
-/node_modules/
+node_modules
 /.vscode/settings.json
 /.idea/*
 !/.idea/dictionaries/
@@ -17,3 +17,6 @@
 /ganache.pid
 /types/truffle-contracts/
 serverdock/
+/dist/
+cache
+/helpers/compiled/

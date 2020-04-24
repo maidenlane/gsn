@@ -3,12 +3,13 @@ pragma solidity ^0.5.16;
 import "@0x/contracts-utils/contracts/src/LibBytes.sol";
 
 import "./BaseGsnAware.sol";
+import "./interfaces/IRelayRecipient.sol";
 
 /**
- * A base class to be inherited by a concrete Relay Recipient
- * A subclass must use "getSender()" instead of "msg.sender"
+ * A base contract to be inherited by any contract that want to receive relayed transactions
+ * A subclass must use "_msgSender()" instead of "msg.sender"
  */
-contract BaseRelayRecipient {
+contract BaseRelayRecipient is IRelayRecipient {
 
     /// the TrustedForwarder singleton we accept calls from.
     // we trust it to verify the caller's signature, and pass the caller's address as last 20 bytes
@@ -29,11 +30,11 @@ contract BaseRelayRecipient {
     /**
      * return the sender of this call.
      * if the call came through our trusted forwarder, return the original sender.
-     * otherwise, return `msg.sender`
+     * otherwise, return `msg.sender`.
      * should be used in the contract anywhere instead of msg.sender
      */
-    function getSender() public view returns (address) {
-        if (msg.sender == address(getTrustedForwarder())) {
+    function _msgSender() internal view returns (address) {
+        if (msg.data.length >= 24 && msg.sender == address(getTrustedForwarder())) {
             // At this point we know that the sender is a trusted forwarder,
             // so we trust that the last bytes of msg.data are the verified sender address.
             // extract sender address from the end of msg.data

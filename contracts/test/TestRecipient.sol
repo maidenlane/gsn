@@ -39,7 +39,7 @@ contract TestRecipient is BaseRelayRecipient {
             withdrawAllBalance();
         }
 
-        emit SampleRecipientEmitted(message, getSender(), msg.sender, tx.origin);
+        emit SampleRecipientEmitted(message, _msgSender(), msg.sender, tx.origin);
     }
 
     function withdrawAllBalance() public {
@@ -50,6 +50,6 @@ contract TestRecipient is BaseRelayRecipient {
     function dontEmitMessage(string memory message) public {}
 
     function emitMessageNoParams() public {
-        emit SampleRecipientEmitted("Method with no parameters", getSender(), msg.sender, tx.origin);
+        emit SampleRecipientEmitted("Method with no parameters", _msgSender(), msg.sender, tx.origin);
     }
 }

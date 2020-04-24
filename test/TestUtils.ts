@@ -4,6 +4,10 @@ import path from 'path'
 
 import { RelayHubInstance, StakeManagerInstance } from '../types/truffle-contracts'
 import HttpWrapper from '../src/relayclient/HttpWrapper'
+import HttpClient from '../src/relayclient/HttpClient'
+import { configureGSN } from '../src/relayclient/GSNConfigurator'
+import { ether } from '@openzeppelin/test-helpers'
+import fs from 'fs'
 
 const localhostOne = 'http://localhost:8090'
 
@@ -17,7 +21,11 @@ export async function startRelay (
   stakeManager: StakeManagerInstance,
   options: any): Promise<ChildProcessWithoutNullStreams> {
   const args = []
-  args.push('--Workdir', '/tmp/server')
+
+  const serverWorkDir = '/tmp/gsn/test/server'
+
+  fs.rmdirSync(serverWorkDir, { recursive: true })
+  args.push('--Workdir', serverWorkDir)
   args.push('--DevMode')
   args.push('--RelayHubAddress', relayHubAddress)
 
@@ -61,18 +69,18 @@ export async function startRelay (
       // @ts-ignore
       if (!proc.alreadystarted) {
         relaylog(`died before init code=${code.toString()}`)
-        reject(lastresponse)
+        reject(new Error(lastresponse))
       }
     }
     proc.on('exit', doaListener.bind(proc))
   })
 
   let res: any
-  const http = new HttpWrapper()
+  const http = new HttpClient(new HttpWrapper(), configureGSN({}))
   let count1 = 3
   while (count1-- > 0) {
     try {
-      res = await http.sendPromise(localhostOne + '/getaddr')
+      res = await http.getPingResponse(localhostOne)
       if (res) break
     } catch (e) {
       console.log('startRelay getaddr error', e)
@@ -83,20 +91,20 @@ export async function startRelay (
   assert.ok(res, 'can\'t ping server')
   // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
   assert.ok(res.RelayServerAddress, `server returned unknown response ${res.toString()}`)
-  const relayManagerAddress = res.RelayServerAddress
+  const relayManagerAddress = res.RelayManagerAddress
   console.log('Relay Server Address', relayManagerAddress)
   // @ts-ignore
   await web3.eth.sendTransaction({
     to: relayManagerAddress,
     from: options.relayOwner,
-    // @ts-ignore
-    value: web3.utils.toWei('2', 'ether')
+    value: ether('2')
   })
 
-  await stakeManager.stakeForAddress(relayManagerAddress, options.delay || 3600, {
+  await stakeManager.stakeForAddress(relayManagerAddress, options.delay || 2000, {
     from: options.relayOwner,
-    value: options.stake
+    value: options.stake || ether('1')
   })
+  await sleep(500)
   await stakeManager.authorizeHub(relayManagerAddress, relayHubAddress, {
     from: options.relayOwner
   })
@@ -105,9 +113,9 @@ export async function startRelay (
   res = ''
   let count = 25
   while (count-- > 0) {
-    res = await http.sendPromise(localhostOne + '/getaddr')
+    res = await http.getPingResponse(localhostOne)
     if (res?.Ready) break
-    await sleep(1500)
+    await sleep(500)
   }
   assert.ok(res.Ready, 'Timed out waiting for relay to get staked and registered')
 
